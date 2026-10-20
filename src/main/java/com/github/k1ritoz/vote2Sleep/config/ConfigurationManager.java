@@ -68,6 +68,7 @@ public class ConfigurationManager {
         if (!config.contains("settings.maximum-players")) config.set("settings.maximum-players", -1);
         if (!config.contains("settings.skip-delay-seconds")) config.set("settings.skip-delay-seconds", 3);
         if (!config.contains("settings.vote-timeout-seconds")) config.set("settings.vote-timeout-seconds", 60);
+        if (!config.contains("settings.vote-cooldown-seconds")) config.set("settings.vote-cooldown-seconds", 10);
         if (!config.contains("settings.allow-storm-skip")) config.set("settings.allow-storm-skip", true);
         if (!config.contains("settings.allow-night-skip")) config.set("settings.allow-night-skip", true);
         if (!config.contains("settings.reset-statistics")) config.set("settings.reset-statistics", true);
@@ -174,6 +175,7 @@ public class ConfigurationManager {
     public int getMaximumPlayers() { return config.getInt("settings.maximum-players"); }
     public int getSkipDelaySeconds() { return config.getInt("settings.skip-delay-seconds"); }
     public int getVoteTimeoutSeconds() { return config.getInt("settings.vote-timeout-seconds"); }
+    public int getVoteCooldownSeconds() { return Math.max(0, config.getInt("settings.vote-cooldown-seconds", 10)); }
     public boolean isStormSkipAllowed() { return config.getBoolean("settings.allow-storm-skip"); }
     public boolean isNightSkipAllowed() { return config.getBoolean("settings.allow-night-skip"); }
     public boolean shouldResetStatistics() { return config.getBoolean("settings.reset-statistics"); }
