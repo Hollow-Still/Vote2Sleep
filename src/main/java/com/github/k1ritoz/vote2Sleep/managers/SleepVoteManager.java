@@ -29,6 +29,8 @@ public class SleepVoteManager {
     private final Map<UUID, BukkitTask> skipTasks;
     private final Map<UUID, BukkitTask> voteTimeoutTasks;
     private final Map<UUID, BukkitTask> nightCheckTasks;
+    private final Map<UUID, Long> lastVoteTimes;
+    private final Map<UUID, Long> lastUnvoteTimes;
 
     public SleepVoteManager(Vote2Sleep plugin) {
         this.plugin = plugin;
@@ -37,6 +39,8 @@ public class SleepVoteManager {
         this.skipTasks = new ConcurrentHashMap<>();
         this.voteTimeoutTasks = new ConcurrentHashMap<>();
         this.nightCheckTasks = new ConcurrentHashMap<>();
+        this.lastVoteTimes = new ConcurrentHashMap<>();
+        this.lastUnvoteTimes = new ConcurrentHashMap<>();
     }
 
     /**
@@ -99,6 +103,17 @@ public class SleepVoteManager {
 
         WorldData worldData = getOrCreateWorldData(world);
 
+        // Enforce the vote cooldown to prevent vote/unvote spam
+        long cooldownMs = plugin.getConfigManager().getVoteCooldownSeconds() * 1000L;
+        long now = System.currentTimeMillis();
+        Long lastVote = lastVoteTimes.get(player.getUniqueId());
+        if (lastVote != null && now - lastVote < cooldownMs) {
+            long remainingSeconds = (long) Math.ceil((cooldownMs - (now - lastVote)) / 1000.0);
+            plugin.getMessageManager().sendMessage(player, "vote-cooldown",
+                    Map.of("seconds", String.valueOf(remainingSeconds)));
+            return;
+        }
+
         // Check if player already voted
         if (worldData.hasPlayerVoted(player.getUniqueId())) {
             plugin.getMessageManager().sendMessage(player, "already-voted");
@@ -124,13 +139,22 @@ public class SleepVoteManager {
         // Add vote
         worldData.addVote(vote);
 
+        // Record vote time for cooldown tracking
+        lastVoteTimes.put(player.getUniqueId(), System.currentTimeMillis());
+
         // Update displays
         updateBossBar(world);
         sendVoteMessage(world);
         playVoteEffects(world, player);
 
         // Check if vote requirements are met
-        if (areRequirementsMet(world)) {
+        if (skipTasks.containsKey(world.getUID())) {
+            // A skip countdown is already running. Do not reschedule it,
+            // otherwise late votes would keep resetting the timer and delay the skip.
+            if (plugin.getConfigManager().isDebugMode()) {
+                plugin.getLogger().info("Skip countdown already running in world " + WorldIdentity.key(world) + ", new vote from " + player.getName() + " does not reset it");
+            }
+        } else if (areRequirementsMet(world)) {
             scheduleNightSkip(world);
         } else {
             scheduleVoteTimeout(world);
@@ -139,7 +163,29 @@ public class SleepVoteManager {
     }
 
     public void removeSleepVote(Player player) {
-        removeVoteFromWorld(player, player.getWorld(), true);
+        World world = player.getWorld();
+        WorldData worldData = worldDataMap.get(world.getUID());
+
+        // Nothing to remove if the player has no vote in this world
+        if (worldData == null || !worldData.hasPlayerVoted(player.getUniqueId())) {
+            return;
+        }
+
+        // Enforce the unvote cooldown to prevent vote/unvote spam
+        long cooldownMs = plugin.getConfigManager().getVoteCooldownSeconds() * 1000L;
+        long now = System.currentTimeMillis();
+        Long lastUnvote = lastUnvoteTimes.get(player.getUniqueId());
+        if (lastUnvote != null && now - lastUnvote < cooldownMs) {
+            long remainingSeconds = (long) Math.ceil((cooldownMs - (now - lastUnvote)) / 1000.0);
+            plugin.getMessageManager().sendMessage(player, "vote-cooldown",
+                    Map.of("seconds", String.valueOf(remainingSeconds)));
+            return;
+        }
+
+        removeVoteFromWorld(player, world, true);
+
+        // Record unvote time for cooldown tracking
+        lastUnvoteTimes.put(player.getUniqueId(), now);
     }
 
     private void removeVoteFromWorld(Player player, World world, boolean notifyPlayer) {
@@ -920,6 +966,9 @@ public class SleepVoteManager {
      * Handles player quitting from the server
      */
     public void handlePlayerQuit(Player player) {
+        lastVoteTimes.remove(player.getUniqueId());
+        lastUnvoteTimes.remove(player.getUniqueId());
+
         removeVoteFromWorld(player, player.getWorld(), false);
 
         // Handle dawn animation player quit
@@ -971,5 +1020,7 @@ public class SleepVoteManager {
         skipTasks.clear();
         voteTimeoutTasks.clear();
         nightCheckTasks.clear();
+        lastVoteTimes.clear();
+        lastUnvoteTimes.clear();
     }
 }

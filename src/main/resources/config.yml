@@ -2,7 +2,7 @@
 # A modern sleep voting plugin for Minecraft servers
 
 # Configuration version - Automatically managed, DO NOT MODIFY
-config-version: "3"
+config-version: "4"
 
 # ===================================
 # GENERAL SETTINGS
@@ -26,6 +26,12 @@ settings:
 
   # Time in seconds before votes automatically expire
   vote-timeout-seconds: 60
+
+  # Cooldown in seconds between two votes (and between two vote removals) per player.
+  # Prevents players from spamming vote/unvote (e.g. entering and leaving beds rapidly).
+  # A player can always remove a vote they cast by mistake; they just cannot re-vote
+  # before this cooldown has passed. Set to 0 to disable the cooldown.
+  vote-cooldown-seconds: 10
 
   # Allow skipping storms during day time
   allow-storm-skip: true
